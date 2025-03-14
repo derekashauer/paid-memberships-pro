@@ -41,6 +41,12 @@ function pmpro_member_edit_get_panels() {
 		}
 	}
 
+	// If we need the courses panel, add it.
+    // Only show if streamline is enabled OR PMPro Courses is active.
+    if ( ! ( pmpro_getOption( 'lifter_streamline' ) || defined( 'PMPRO_COURSES_VERSION' ) ) ) {
+		$panels[] = new PMPro_Member_Edit_Panel_Courses();
+    }
+
 	/**
 	 * Filter to add/edit panels on the member edit page.
 	 *

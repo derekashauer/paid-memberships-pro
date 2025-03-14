@@ -664,3 +664,75 @@ function pmpro_llms_show_membership_settings_for_access_plans() {
 	return ! get_option( 'pmpro_lifter_streamline' );
 }
 add_filter( 'llms_show_membership_settings_for_access_plans', 'pmpro_llms_show_membership_settings_for_access_plans' );
+
+/**
+ * Repair LifterLMS course enrollment when a user visits a single course page.
+ */
+function pmpro_lifter_repair_course_enrollment() {
+
+	// Require user be logged in and if filter be true to allow repair.
+    if ( ! is_user_logged_in() || ! apply_filters( 'pmpro_lifter_repair_course_enrollment', false ) ) {
+        return;
+    }
+
+    $user_id   = get_current_user_id();
+    $course_id = get_the_ID();
+
+    // Check if the course is restricted by a PMPro membership level.
+    $hasaccess = pmpro_has_membership_access( $course_id, $user_id, true );
+
+	if ( is_array( $hasaccess ) ) {
+        $post_membership_levels_ids = $hasaccess[1];
+        $hasaccess = $hasaccess[0];
+
+		$is_enrolled = llms_is_user_enrolled( $user_id, $course_id );
+
+        // If the user should have access but isn't enrolled, enroll them.
+        if ( $hasaccess && ! $is_enrolled ) {
+            llms_enroll_student( $user_id, $course_id );
+        } else if ( ! $hasaccess && $is_enrolled ) { // If the user shouldn't have access but is enrolled, unenroll them.
+            llms_unenroll_student( $user_id, $course_id );
+        }
+    }
+}
+add_action( 'template_redirect', 'pmpro_lifter_repair_course_enrollment' );
+
+/**
+ * Repair course enrollment on single course pages.
+ */
+add_filter( 'pmpro_lifter_repair_course_enrollment', 'pmpro_lifter_repair_course_enrollment_on_course_view' );
+function pmpro_lifter_repair_course_enrollment_on_course_view() {
+	return is_singular( 'course' );
+}
+
+/**
+ * Add "Sync Enrollments" to the row actions for courses.
+ *
+ * @param array  $actions Array of row action links.
+ * @param object $post    The post object.
+ * @return array
+ */
+function pmpro_lifterlms_member_course_enrollment_sync_add_row_action( $actions, $post ) {
+    // Only add for courses.
+    if ( $post->post_type !== 'course' ) {
+        return $actions;
+    }
+
+    // Add the repair enrollments link.
+    $url = add_query_arg(
+        array(
+            'page'      => 'pmpro-course-enrollment-sync',
+            'course_id' => $post->ID,
+        ),
+        admin_url( 'admin.php' )
+    );
+
+    $actions['sync_enrollments'] = sprintf(
+        '<a href="%s">%s</a>',
+        esc_url( $url ),
+        esc_html__( 'Sync Enrollments', 'paid-memberships-pro' )
+    );
+
+    return $actions;
+}
+add_filter( 'post_row_actions', 'pmpro_lifterlms_member_course_enrollment_sync_add_row_action', 10, 2 );
